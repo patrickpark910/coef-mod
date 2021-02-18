@@ -46,7 +46,6 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
-from num2tex import num2tex
 
 from mcnp_funcs import *
 
@@ -64,12 +63,12 @@ PARAMS_CSV_NAME = f'{MODULE_NAME}_parameters.csv'
 FIGURE_NAME = f'{MODULE_NAME}_results.png'
 
 MOD_TEMPS_CELSIUS = [0, 10, 20, 30, 40, 50, 60, 70, 80]
-MOD_TEMPS = [(i + 294) for i in MOD_TEMPS_CELSIUS]
+MOD_TEMPS = [(i + 273.15) for i in MOD_TEMPS_CELSIUS]
 
 
 def main():
     initialize_rane()
-
+    """
     BASE_INPUT_NAME = f'{MODULE_NAME}-a100-h100-r100.i'  # find_base_file(FILEPATH)
     check_kcode(FILEPATH, BASE_INPUT_NAME)
 
@@ -85,7 +84,35 @@ def main():
 
     print(f"Created {num_inputs_created} new input decks.\n"
           f"--Skipped {num_inputs_skipped} input decks because they already exist.")
+
     """
+    # Okay, I'm going to move all the files in the inputs folder into the module folder.
+    """
+    for file in os.listdir(f'{FILEPATH}/{INPUTS_FOLDER_NAME}'):
+        if file in os.listdir(f'{FILEPATH}'):
+            os.remove(f'{FILEPATH}/{file}')
+        os.rename(f'{FILEPATH}/{INPUTS_FOLDER_NAME}/{file}', f'{FILEPATH}/{file}')
+
+    print(f"Now rewriting new input decks to change moderator (water) densities.")
+
+    num_inputs_created = 0
+    num_inputs_skipped = 0
+
+    for mod_temp in MOD_TEMPS:
+        cell_densities_dict = {WATER_MAT_CARD: find_water_density(mod_temp, units='Kelvin')}
+        base_input_name = f'{MODULE_NAME}-temp-{str(int(mod_temp)).zfill(4)}.i'
+        input_created = change_cell_densities(FILEPATH, MODULE_NAME, cell_densities_dict, base_input_name, INPUTS_FOLDER_NAME)
+        if input_created:
+            num_inputs_created += 1
+            os.remove(f"{FILEPATH}/{base_input_name}")
+            density_without_decimals_str = ''.join(c for c in str(cell_densities_dict[WATER_MAT_CARD]) if c not in '.')
+            os.rename(f"{FILEPATH}/{INPUTS_FOLDER_NAME}/{MODULE_NAME}-m{WATER_MAT_CARD}-{density_without_decimals_str}.i",
+                      f"{FILEPATH}/{INPUTS_FOLDER_NAME}/{MODULE_NAME}-temp-{str(int(mod_temp)).zfill(4)}.i")
+        if not input_created: num_inputs_skipped += 1
+
+    print(f"Created {num_inputs_created} new input decks.\n"
+          f"--Skipped {num_inputs_skipped} input decks because they already exist.")
+
     if not check_run_mcnp(): sys.exit()
 
     # Run MCNP for all .i files in f".\{inputs_folder_name}".
@@ -95,7 +122,7 @@ def main():
 
     # Deletes MCNP runtape and source dist files.
     delete_files(f"{FILEPATH}/{OUTPUTS_FOLDER_NAME}", r=True, s=True)
-
+    """
     # Setup a dataframe to collect keff values
     keff_df = pd.DataFrame(columns=["x", "keff", "keff unc"])  # use lower cases to match 'rods' def above
     keff_df["x"] = MOD_TEMPS
@@ -110,12 +137,14 @@ def main():
     print(f"\nDataframe of keff values and their uncertainties:\n{keff_df}\n")
     keff_df.to_csv(KEFF_CSV_NAME)
 
-    convert_keff_to_rho_coef(float(0.1), KEFF_CSV_NAME, RHO_CSV_NAME)
+    original_x_value = float(273.15)
+
+    convert_keff_to_rho_coef(original_x_value, KEFF_CSV_NAME, RHO_CSV_NAME)
     calc_params_coef(RHO_CSV_NAME, PARAMS_CSV_NAME, MODULE_NAME)
 
-    for rho_or_dollars in ['rho', 'dollars']: plot_data_pntc(KEFF_CSV_NAME, RHO_CSV_NAME, PARAMS_CSV_NAME, FIGURE_NAME,
-                                                             rho_or_dollars)
-    """
+    for rho_or_dollars in ['rho', 'dollars']: plot_data_coef_mod(KEFF_CSV_NAME, RHO_CSV_NAME, PARAMS_CSV_NAME,
+                                                                 FIGURE_NAME, rho_or_dollars)
+
     print(f"\n************************ PROGRAM COMPLETE ************************\n")
 
 
@@ -131,7 +160,7 @@ NB: Major plot settings have been organized into variables for your personal con
 '''
 
 
-def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rho_or_dollars):
+def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rho_or_dollars):
     if rho_or_dollars.lower() in ['r', 'p', 'rho']:
         rho_or_dollars = 'rho'
     elif rho_or_dollars.lower() in ['d', 'dollar', 'dollars']:
@@ -157,8 +186,8 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
 
     plot_color = ["tab:red", "tab:blue", "tab:green"]
 
-    ax_x_min, ax_x_max = 0, 3250
-    ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 500, 100
+    ax_x_min, ax_x_max = 250, 400
+    ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 100, 20
 
     ax_keff_y_min, ax_keff_y_max = 0.85, 1.1
     ax_keff_y_major_ticks_interval, ax_keff_y_minor_ticks_interval = 0.05, 0.01

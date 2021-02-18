@@ -3463,7 +3463,7 @@ c
 12740  103  -2.70       -122314  121389 -123340  192350    imp:n=1   $ sample tube hole fix
 c
 c
-c
+c --Begin Core Water Cells--
 c ------------------------------
 c --------- Core water ---------
 c ------------------------------
@@ -3553,7 +3553,7 @@ c
 13308  102  -1.0  112301 -122301  121301 -121308   imp:n=1   $ Water below reflector assy
 13309  102  -1.0  112301 -10      111398 -121301   imp:n=1   $ Water around lower grid plate
 c
-c
+c --End Core Water Cells--
 c
 c ------------------------------
 c ------ Central Thimble -------

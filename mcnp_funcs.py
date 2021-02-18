@@ -69,10 +69,26 @@ ZRH_TEMP_DICT = {294: 'zr/h.30t', 400: 'zr/h.31t', 500: 'zr/h.32t', 600: 'zr/h.3
 WATER_TEMP_DICT = {294: 'lwtr.20t', 350: 'lwtr.21t', 400: 'lwtr.22t', 450: 'lwtr.23t', 500: 'lwtr.24t',
                    550: 'lwtr.25t', 600: 'lwtr.26t', 650: 'lwtr.27t', 800: 'lwtr.28t'}
 
-WATER_MAT_CARD = '102'
+WATER_MAT_CARD = 102
 FUEL_MAT_CARDS_LIST = list(FE_ID.values())
 MOD_MAT_CARDS_LIST = [WATER_MAT_CARD]
 
+def find_water_density(temp, units='Kelvin'):
+    temp = float(temp)
+    while units.lower() != 'c':
+        if units.lower() in ['c', 'cel', 'celsius']: units = 'c'
+        elif units.lower() in ['f', 'fahren', 'fahrenheit']: temp, units = ((temp-32)*0.556), 'c'
+        elif units.lower() in ['k','kelvin','kelvins']: temp, units = (temp-273.15), 'c'
+        elif units.lower() in ['q', 'quit', 'kill']: sys.exit()
+        else:
+            user_input = input("Units not recognized. Input units ['f','c','k'] or 'q' to quit: ")
+            temp, units = user_input[0], user_input[1]
+    # Equation for water density given temperature in C, works for 0 to 150 C at 1 atm
+    # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4909168/
+    density = round((999.83952+16.945176*temp-7.9870401e-3*temp**2-46.170461e-6*temp**3+105.56302e-9-280.54253e-12*temp**5)/(1+16.897850e-3*temp)/1000, 6)
+    print(f"At {round(temp,6)} {units.upper()}, water density was calculated to be {density} g/cc.")
+    if temp < 0 or temp > 150: print(f"--Warning. The given {temp} {units.upper()} is outside of the limits [0, 150] C of the used density equation.")
+    return density
 
 def initialize_rane():
     print(
@@ -220,23 +236,25 @@ def calc_params_coef(rho_csv_name, params_csv_name, module_name):
             params_df.loc[x_value, 'coef dollars'], params_df.loc[x_value, 'coef dollars unc'], \
             params_df.loc[x_value, 'coef rho avg'], params_df.loc[x_value, 'coef dollars avg'] = 0, 0, 0, 0, 0, 0
         else:
-            if module_name == 'void':
+            if module_name == 'coef_void':
                 params_df.loc[x_value, 'D x'] = -100 * round(x_value - original_x_value, 1)
-            elif module_name == 'pntc':
+            elif module_name == 'coef_pntc':
+                params_df.loc[x_value, 'D x'] = round(x_value - original_x_value, 1)
+            elif module_name == 'coef_mod':
                 params_df.loc[x_value, 'D x'] = round(x_value - original_x_value, 1)
 
             params_df.loc[x_value, 'coef rho'] = params_df.loc[x_value, 'D rho'] / params_df.loc[x_value, 'D x']
             params_df.loc[x_value, 'coef dollars'] = params_df.loc[x_value, 'D dollars'] / params_df.loc[x_value, 'D x']
 
-            if module_name == 'void' or 'pntc':
+            if module_name == 'coef_void' or 'coef_pntc' or 'coef_mod':
                 params_df.loc[x_value, 'coef rho unc'] = params_df.loc[x_value, 'rho unc'] / 100
                 params_df.loc[x_value, 'coef dollars unc'] = params_df.loc[x_value, 'dollars unc'] / 100
 
     for x_value in params_df.index.values.tolist():
         x = []
-        if str(module_name).lower() == 'void':
+        if str(module_name).lower() == 'coef_void':
             x = [i for i in params_df.index.values.tolist() if x_value <= i <= original_x_value]
-        elif str(module_name).lower() == 'pntc':
+        elif str(module_name).lower() == 'coef_pntc' or 'coef_mod':
             x = [i for i in params_df.index.values.tolist() if original_x_value <= i <= x_value]
         if len(x) > 1:
             y_rho = params_df.loc[x, 'coef rho'].tolist()
@@ -538,13 +556,14 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
     new_input_deck = open(new_input_name, 'w+')
 
     start_marker_cells = "Begin Cells"
+    start_marker_water_cells = "Begin Core Water Cells"
     start_marker_surfs = "Begin Surfaces"
-    # start_marker_data = "Begin Options"
     start_marker_mats = "Begin Materials"
+    end_marker_water_cells = "End Core Water Cells"
     end_marker_mats = "End Materials"
 
     # Indicates if we are between 'start_marker' and 'end_marker'
-    inside_block_cells, inside_block_surfs, inside_block_mats= False, False, False
+    inside_block_cells, inside_block_surfs, inside_block_mats, inside_block_water_cells = False, False, False, False
     mat_id = 0
 
     '''
@@ -558,36 +577,52 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
     # Now, we're reading the base input deck ('rc.i') line-by-line.
     for line in base_input_deck:
         # If this is the line with the 'start_marker', rewrite it to the new file with required changes
-        if not inside_block_cells and not inside_block_surfs and not inside_block_mats:
-            if start_marker_cells in line:
-                inside_block_cells = True
-                new_input_deck.write(line)
-                continue
+        if start_marker_cells in line:
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = True, False, False, False
+            new_input_deck.write(line)
+            continue
+        if start_marker_water_cells in line:
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = False, True, False, False
             new_input_deck.write(line)
             continue
         if start_marker_surfs in line:
-            inside_block_cells, inside_block_surfs, inside_block_mats = False, True, False
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = False, False, True, False
             new_input_deck.write(line)
             continue
         if start_marker_mats in line:
-            inside_block_cells, inside_block_surfs, inside_block_mats = False, False, True
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = False, False, False, True
             new_input_deck.write(line)
             continue
         if end_marker_mats in line:
-            inside_block_cells, inside_block_surfs, inside_block_mats = False, False, False
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = False, False, False, False
+            new_input_deck.write(line)
+            continue
+        if end_marker_water_cells in line:
+            inside_block_cells, inside_block_water_cells, inside_block_surfs, inside_block_mats = True, False, False, False
+            new_input_deck.write(line)
+            continue
+        if not inside_block_cells and not inside_block_surfs and not inside_block_mats and not inside_block_water_cells:
             new_input_deck.write(line)
             continue
         # Logic for what to do when we're inside the block
         if inside_block_cells:
             # We're now making the actual changes to the cell density
             # 'line' already has \n at the end, but anything else doesn't
-            if len(line.split()) > 0 and line.split()[0] != 'c' and line.split()[1] in cell_temps_dict.keys():
+            if len(line.split()) > 0 and line.split()[0] != 'c' and line.split()[1] in [str(m) for m in list(cell_temps_dict.keys())]:
                 new_input_deck.write(f"c {line}")
                 new_input_deck.write(
-                    f"{edit_cell_temp_code(line, line.split()[1], cell_temps_dict[line.split()[1]])}\n")
+                    f"{edit_cell_temp_code(line, line.split()[1], cell_temps_dict[int(line.split()[1])])}\n")
                 continue
             elif len(line.split()) > 0 and line.split()[0] == 'c':
                 new_input_deck.write(line)
+                continue
+            else:
+                new_input_deck.write(line)
+                continue
+        if inside_block_water_cells:
+            if len(line.split()) > 0 and line.split()[0] != 'c' and 'imp:' in line:
+                new_input_deck.write(f"c {line}")
+                new_input_deck.write(line.replace('imp:n=1', f'imp:n=1 tmp={cell_temps_dict[102] * MEV_PER_KELVIN}'))
                 continue
             else:
                 new_input_deck.write(line)
@@ -598,7 +633,7 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
         if inside_block_mats:
             if len(line.split()) > 0 and line.split()[0] != 'c':
                 if line.startswith('m'):
-                    mat_id = ''.join(filter(lambda i: i.isdigit(), line.split()[0]))
+                    mat_id = int(''.join(filter(lambda i: i.isdigit(), line.split()[0])))
                 if mat_id in list(cell_temps_dict.keys()):
                     # print(mat_id, mat_id in list(cell_temps_dict.keys()))
                     new_input_deck.write(f"c {line}")
