@@ -45,7 +45,7 @@ import os, sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator, FormatStrFormatter
+from matplotlib.ticker import LinearLocator, MultipleLocator, FormatStrFormatter
 
 from mcnp_funcs import *
 
@@ -62,7 +62,7 @@ RHO_CSV_NAME = f'{MODULE_NAME}_rho.csv'
 PARAMS_CSV_NAME = f'{MODULE_NAME}_parameters.csv'
 FIGURE_NAME = f'{MODULE_NAME}_results.png'
 
-MOD_TEMPS_CELSIUS = [0, 10, 20, 30, 40, 50, 60, 70, 80]
+MOD_TEMPS_CELSIUS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95]
 MOD_TEMPS = [(i + 273.15) for i in MOD_TEMPS_CELSIUS]
 
 
@@ -137,7 +137,7 @@ def main():
     print(f"\nDataframe of keff values and their uncertainties:\n{keff_df}\n")
     keff_df.to_csv(KEFF_CSV_NAME)
 
-    original_x_value = float(273.15)
+    original_x_value = float(283.15)
 
     convert_keff_to_rho_coef(original_x_value, KEFF_CSV_NAME, RHO_CSV_NAME)
     calc_params_coef(RHO_CSV_NAME, PARAMS_CSV_NAME, MODULE_NAME)
@@ -177,32 +177,33 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
     legend_fontsize = "x-large"
     # fontsize: int or {'xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large'}
     my_dpi = 320
-    x_label = r"Fuel temperature (K) "
+    x_label = r"Moderator temperature (K) "
     y_label_keff, y_label_rho, y_label_coef = r"Effective multiplication factor ($k_{eff}$)", \
                                               r"Reactivity ($\%\Delta k/k$)", \
-                                              r"Fuel temperature coefficient ((%$\Delta k/k$)/$\degree$C)"
+                                              r"Moderator temperature coefficient ((%$\Delta k/k$)/$\degree$C)"
     if rho_or_dollars == 'dollars':
         y_label_rho, y_label_coef = r"Reactivity ($\Delta$\$)", r"Fuel temperature coefficient ($\Delta$\$/$\degree$C)"
 
     plot_color = ["tab:red", "tab:blue", "tab:green"]
 
-    ax_x_min, ax_x_max = 250, 400
-    ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 100, 20
+    ax_x_min, ax_x_max = 263.15, 363.15
+    ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 10.15, 5.075
+    ax_x_major_ticks_num, ax_x_minor_ticks_num = 10+1, 2*10+1
 
-    ax_keff_y_min, ax_keff_y_max = 0.85, 1.1
-    ax_keff_y_major_ticks_interval, ax_keff_y_minor_ticks_interval = 0.05, 0.01
+    ax_keff_y_min, ax_keff_y_max = 1, 1.05
+    ax_keff_y_major_ticks_interval, ax_keff_y_minor_ticks_interval = 0.01, 0.002
 
-    ax_rho_y_min, ax_rho_y_max = -14, 2
-    ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 2, 1
+    ax_rho_y_min, ax_rho_y_max = -0.15, 0.01
+    ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.01, 100
     if rho_or_dollars == 'dollars':
-        ax_rho_y_min, ax_rho_y_max = -20, 1.5
-        ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 5, 1
+        ax_rho_y_min, ax_rho_y_max = -0.10, 0.01
+        ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.01, 0.002
 
-    ax_pntc_y_min, ax_pntc_y_max = -0.024, 0.004
-    ax_pntc_y_major_ticks_interval, ax_pntc_y_minor_ticks_interval = 0.01, 0.002
+    ax_coef_y_min, ax_coef_y_max = -0.004, 0.004
+    ax_coef_y_major_ticks_interval, ax_coef_y_minor_ticks_interval = 0.001, 0.0002
     if rho_or_dollars == 'dollars':
-        ax_pntc_y_min, ax_pntc_y_max = -0.02, 0.004
-        ax_pntc_y_major_ticks_interval, ax_pntc_y_minor_ticks_interval = 0.004, 0.002
+        ax_coef_y_min, ax_coef_y_max = -0.022, 0.004
+        ax_coef_y_major_ticks_interval, ax_coef_y_minor_ticks_interval = 0.004, 0.002
 
     fig, axs = plt.subplots(3, 1, figsize=(1636 / 96, 3 * 673 / 96), dpi=my_dpi, facecolor='w', edgecolor='k')
     ax_keff, ax_rho, ax_coef = axs[0], axs[1], axs[2]  # integral, differential worth on top, bottom, resp.
@@ -320,15 +321,18 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
 
     # Coef worth plot settings
     ax_coef.set_xlim([ax_x_min, ax_x_max])
-    ax_coef.set_ylim([ax_pntc_y_min, ax_pntc_y_max])
-    ax_coef.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
-    ax_coef.yaxis.set_major_locator(MultipleLocator(ax_pntc_y_major_ticks_interval))
+    ax_coef.set_ylim([ax_coef_y_min, ax_coef_y_max])
+    ax_coef.xaxis.set_major_locator(LinearLocator(ax_x_major_ticks_num))
+    # ax_coef.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
+    ax_coef.yaxis.set_major_locator(MultipleLocator(ax_coef_y_major_ticks_interval))
     ax_coef.minorticks_on()
-    ax_coef.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
-    ax_coef.yaxis.set_minor_locator(MultipleLocator(ax_pntc_y_minor_ticks_interval))
+    ax_coef.xaxis.set_minor_locator(LinearLocator(ax_x_minor_ticks_num))
+    # ax_coef.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
+    ax_coef.yaxis.set_minor_locator(MultipleLocator(ax_coef_y_minor_ticks_interval))
 
     # Use for 2 decimal places after 0. for dollars units
     # Overwritten to 3 decimal places for PNTC
+    ax_coef.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     if rho_or_dollars == "dollars": ax_coef.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
 
     ax_coef.tick_params(axis='both', which='major', labelsize=label_fontsize)

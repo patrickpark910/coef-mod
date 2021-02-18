@@ -249,6 +249,9 @@ def calc_params_coef(rho_csv_name, params_csv_name, module_name):
             if module_name == 'coef_void' or 'coef_pntc' or 'coef_mod':
                 params_df.loc[x_value, 'coef rho unc'] = params_df.loc[x_value, 'rho unc'] / 100
                 params_df.loc[x_value, 'coef dollars unc'] = params_df.loc[x_value, 'dollars unc'] / 100
+                
+        if module_name == 'coef_mod':
+            params_df.loc[x_value, 'density'] = find_water_density(x_value)
 
     for x_value in params_df.index.values.tolist():
         x = []
