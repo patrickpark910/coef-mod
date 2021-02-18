@@ -35,6 +35,10 @@ MCNP6.2 does not support all cross-section (xs) libraries.
 If the xs library is unsupported, a fatal error will occur.
 ./MCNP_DATA/xsdir_mcnp6.2 contains a list of all the xs libraries supported by MCNP6.2.
 
+coef_mod does not normalize the water xs data for all temperatures.
+USGS uses makxsf to shift existing xs libraries for new temps. See their neutronics report.
+makxsf info can be found here: https://mcnp.lanl.gov/pdf_files/la-ur-06-7002.pdf
+
 """
 
 import os, sys
@@ -47,40 +51,41 @@ from num2tex import num2tex
 from mcnp_funcs import *
 
 FILEPATH = os.path.dirname(os.path.abspath(__file__))
-WATER_MAT_CARD = '102'
-FUEL_TEMPS = list(U235_TEMP_DICT.keys())
 # [200,250,300,350,400,450,500,650,700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,1350,1400]
 # Prefer hardcoded lists rather than np.arange, which produces imprecise floating points, e.g., 0.7000000...003
 # Select temperature range that covers all study ranges:
 # https://mcnp.lanl.gov/pdf_files/la-ur-12-20338.pdf (slide 9)
 INPUTS_FOLDER_NAME = 'inputs'
 OUTPUTS_FOLDER_NAME = 'outputs'
-MODULE_NAME = 'pntc'
+MODULE_NAME = 'coef_mod'
 KEFF_CSV_NAME = f'{MODULE_NAME}_keff.csv'
 RHO_CSV_NAME = f'{MODULE_NAME}_rho.csv'
 PARAMS_CSV_NAME = f'{MODULE_NAME}_parameters.csv'
 FIGURE_NAME = f'{MODULE_NAME}_results.png'
 
+MOD_TEMPS_CELSIUS = [0, 10, 20, 30, 40, 50, 60, 70, 80]
+MOD_TEMPS = [(i + 294) for i in MOD_TEMPS_CELSIUS]
+
 
 def main():
     initialize_rane()
-    """
-    BASE_INPUT_NAME = 'pntc-a100-h100-r100.i'  # find_base_file(FILEPATH)
+
+    BASE_INPUT_NAME = f'{MODULE_NAME}-a100-h100-r100.i'  # find_base_file(FILEPATH)
     check_kcode(FILEPATH, BASE_INPUT_NAME)
 
     num_inputs_created = 0
     num_inputs_skipped = 0
-    for i in range(0, len(FUEL_TEMPS)):
+    for i in range(0, len(MOD_TEMPS)):
         cell_temps_dict = {}
-        for fe_id in list(FE_ID.values()): cell_temps_dict[fe_id] = FUEL_TEMPS[i]
-        input_created = change_cell_and_mat_temps(FILEPATH, MODULE_NAME, cell_temps_dict, BASE_INPUT_NAME,
-                                                  INPUTS_FOLDER_NAME)
+        for mod_id in MOD_MAT_CARDS_LIST: cell_temps_dict[mod_id] = MOD_TEMPS[i]
+        input_created = change_cell_and_mat_temps(FILEPATH, MODULE_NAME, cell_temps_dict,
+                                                  BASE_INPUT_NAME, INPUTS_FOLDER_NAME)
         if input_created: num_inputs_created += 1
         if not input_created: num_inputs_skipped += 1
 
     print(f"Created {num_inputs_created} new input decks.\n"
           f"--Skipped {num_inputs_skipped} input decks because they already exist.")
-
+    """
     if not check_run_mcnp(): sys.exit()
 
     # Run MCNP for all .i files in f".\{inputs_folder_name}".
@@ -93,24 +98,24 @@ def main():
 
     # Setup a dataframe to collect keff values
     keff_df = pd.DataFrame(columns=["x", "keff", "keff unc"])  # use lower cases to match 'rods' def above
-    keff_df["x"] = FUEL_TEMPS
+    keff_df["x"] = MOD_TEMPS
     keff_df.set_index("x", inplace=True)
 
-    for fuel_temp in FUEL_TEMPS:
+    for mod_temp in MOD_TEMPS:
         keff, keff_unc = extract_keff(
-            f"{FILEPATH}/{OUTPUTS_FOLDER_NAME}/o_{MODULE_NAME}-fuel-{str(int(fuel_temp)).zfill(4)}.o")
-        keff_df.loc[fuel_temp, 'keff'] = keff
-        keff_df.loc[fuel_temp, 'keff unc'] = keff_unc
+            f"{FILEPATH}/{OUTPUTS_FOLDER_NAME}/o_{MODULE_NAME}-temp-{str(int(mod_temp)).zfill(4)}.o")
+        keff_df.loc[mod_temp, 'keff'] = keff
+        keff_df.loc[mod_temp, 'keff unc'] = keff_unc
 
     print(f"\nDataframe of keff values and their uncertainties:\n{keff_df}\n")
     keff_df.to_csv(KEFF_CSV_NAME)
-    """
+
     convert_keff_to_rho_coef(float(0.1), KEFF_CSV_NAME, RHO_CSV_NAME)
     calc_params_coef(RHO_CSV_NAME, PARAMS_CSV_NAME, MODULE_NAME)
 
     for rho_or_dollars in ['rho', 'dollars']: plot_data_pntc(KEFF_CSV_NAME, RHO_CSV_NAME, PARAMS_CSV_NAME, FIGURE_NAME,
                                                              rho_or_dollars)
-
+    """
     print(f"\n************************ PROGRAM COMPLETE ************************\n")
 
 
@@ -138,7 +143,7 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
     x_values_list = rho_df.index.values.tolist()
 
     # Personal parameters, to be used in plot settings below.
-    sigma_error = 3 # 1-sigma (68%) errors are usually too small to be discernable, so I (and USGS) likes to use 3-sigma
+    sigma_error = 3  # 1-sigma (68%) errors are usually too small to be discernable, so I (and USGS) likes to use 3-sigma
     label_fontsize = 16
     legend_fontsize = "x-large"
     # fontsize: int or {'xx-small', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large'}
@@ -164,10 +169,10 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
         ax_rho_y_min, ax_rho_y_max = -20, 1.5
         ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 5, 1
 
-    ax_pntc_y_min, ax_pntc_y_max = -0.024,0.004
+    ax_pntc_y_min, ax_pntc_y_max = -0.024, 0.004
     ax_pntc_y_major_ticks_interval, ax_pntc_y_minor_ticks_interval = 0.01, 0.002
     if rho_or_dollars == 'dollars':
-        ax_pntc_y_min, ax_pntc_y_max = -0.02,0.004
+        ax_pntc_y_min, ax_pntc_y_max = -0.02, 0.004
         ax_pntc_y_major_ticks_interval, ax_pntc_y_minor_ticks_interval = 0.004, 0.002
 
     fig, axs = plt.subplots(3, 1, figsize=(1636 / 96, 3 * 673 / 96), dpi=my_dpi, facecolor='w', edgecolor='k')
@@ -175,10 +180,10 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
 
     # Plot data for keff.
     x = x_values_list
-    x_fit = np.linspace(min(x), max(x), 100*len(x_values_list))
+    x_fit = np.linspace(min(x), max(x), 100 * len(x_values_list))
     y_keff, y_keff_unc = [], []
     for value in x:
-        y_keff.append(keff_df.loc[value, 'keff']), y_keff_unc.append(sigma_error*keff_df.loc[value, 'keff unc'])
+        y_keff.append(keff_df.loc[value, 'keff']), y_keff_unc.append(sigma_error * keff_df.loc[value, 'keff unc'])
 
     ax_keff.errorbar(x, y_keff, yerr=y_keff_unc,
                      marker="o", ls="none",
@@ -201,9 +206,9 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
     y_rho, y_rho_unc = [], []
     for value in x:
         if rho_or_dollars == 'rho': y_rho.append(rho_df.loc[value, 'rho']), y_rho_unc.append(
-            sigma_error*rho_df.loc[value, 'rho unc'])
+            sigma_error * rho_df.loc[value, 'rho unc'])
         if rho_or_dollars == 'dollars': y_rho.append(rho_df.loc[value, 'dollars']), y_rho_unc.append(
-            sigma_error*rho_df.loc[value, 'dollars unc'])
+            sigma_error * rho_df.loc[value, 'dollars unc'])
     ax_rho.errorbar(x, y_rho, yerr=y_rho_unc,
                     marker="o", ls="none",
                     color=plot_color[1], elinewidth=2, capsize=3, capthick=2)
@@ -222,10 +227,10 @@ def plot_data_pntc(keff_csv_name, rho_csv_name, params_csv_name, figure_name, rh
     for value in x:
         if rho_or_dollars == 'rho':
             y_coef.append(params_df.loc[value, 'coef rho']), y_coef_unc.append(
-                sigma_error*params_df.loc[value, 'coef rho unc'])
+                sigma_error * params_df.loc[value, 'coef rho unc'])
         else:
             y_coef.append(params_df.loc[value, 'coef dollars']), y_coef_unc.append(
-                sigma_error*params_df.loc[value, 'coef dollars unc'])
+                sigma_error * params_df.loc[value, 'coef dollars unc'])
 
     ax_coef.errorbar(x, y_coef, yerr=y_coef_unc,
                      marker="o", ls="none",

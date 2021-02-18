@@ -4,7 +4,7 @@ AUXILLIARY MCNP FUNCTIONS
 Written by Patrick Park (RO, Physics '22)
 ppark@reed.edu
 First published: Dec. 30, 2020
-Last updated: Feb. 16, 2021
+Last updated: Feb. 17, 2021
 
 __________________
 Default MCNP units
@@ -52,6 +52,7 @@ MEV_PER_KELVIN = 8.617e-11
 REACT_ADD_RATE_LIMIT_DOLLARS = 0.16
 RODS = ["safe", "shim", "reg"]  # must be in lower case
 
+# From LA-UR-13-21822
 U235_TEMP_DICT = {294: '92235.80c', 600: '92235.81c', 900: '92235.82c', 1200: '92235.83c',
                   2500: '92235.84c', 0.1: '92235.85c', 250: '92235.86c', 77: '92235.67c', 3000: '92235.68c'}
 U238_TEMP_DICT = {294: '92238.80c', 600: '92238.81c', 900: '92238.82c', 1200: '92238.83c',
@@ -65,6 +66,12 @@ HZR_TEMP_DICT = {294: 'h/zr.20t', 400: 'h/zr.21t', 500: 'h/zr.22t', 600: 'h/zr.2
                  800: 'h/zr.25t', 1000: 'h/zr.26t', 1200: 'h/zr.27t'}
 ZRH_TEMP_DICT = {294: 'zr/h.30t', 400: 'zr/h.31t', 500: 'zr/h.32t', 600: 'zr/h.33t', 700: 'zr/h.34t',
                  800: 'zr/h.35t', 1000: 'zr/h.36t', 1200: 'zr/h.37t'}
+WATER_TEMP_DICT = {294: 'lwtr.20t', 350: 'lwtr.21t', 400: 'lwtr.22t', 450: 'lwtr.23t', 500: 'lwtr.24t',
+                   550: 'lwtr.25t', 600: 'lwtr.26t', 650: 'lwtr.27t', 800: 'lwtr.28t'}
+
+WATER_MAT_CARD = '102'
+FUEL_MAT_CARDS_LIST = list(FE_ID.values())
+MOD_MAT_CARDS_LIST = [WATER_MAT_CARD]
 
 
 def initialize_rane():
@@ -73,7 +80,7 @@ def initialize_rane():
 
 
 def find_base_file(filepath):
-    # filepath: string with current folder directory name, e.g. "C:/MCNP6/facilities/reed/rodcal-mcnp"
+    # filepath: string with current folder directory name, e.g. "C:/MCNP6/facilities/reed/rodcal_mcnp"
     base_input_name = None
     while base_input_name == None:
         potential_base_input_name = input('Input base MCNP file name, including extension: ')
@@ -215,7 +222,8 @@ def calc_params_coef(rho_csv_name, params_csv_name, module_name):
         else:
             if module_name == 'void':
                 params_df.loc[x_value, 'D x'] = -100 * round(x_value - original_x_value, 1)
-            elif module_name == 'pntc': params_df.loc[x_value, 'D x'] = round(x_value - original_x_value, 1)
+            elif module_name == 'pntc':
+                params_df.loc[x_value, 'D x'] = round(x_value - original_x_value, 1)
 
             params_df.loc[x_value, 'coef rho'] = params_df.loc[x_value, 'D rho'] / params_df.loc[x_value, 'D x']
             params_df.loc[x_value, 'coef dollars'] = params_df.loc[x_value, 'D dollars'] / params_df.loc[x_value, 'D x']
@@ -515,9 +523,9 @@ def change_cell_densities(filepath, module_name, cell_densities_dict, base_input
 
 def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input_name, inputs_folder_name):
     base_input_deck = open(base_input_name, 'r')
-    # Encode new input name with rod heights: "input-a100-h20-r55.i" means safe 100, shim 20, reg 55, etc.
 
-    new_input_name = f'{filepath}/{inputs_folder_name}/{module_name}-fuel-{str(int(list(cell_temps_dict.values())[0])).zfill(4)}.i'
+    # Encode new input name with rod heights: "coef_mod-temp-294.i" means moderator (water) at 294 K.
+    new_input_name = f'{filepath}/{inputs_folder_name}/{module_name}-temp-{str(int(list(cell_temps_dict.values())[0])).zfill(4)}.i'
     # careful not to mix up ' ' and " " here
 
     # If the inputs folder doesn't exist, create it
@@ -525,20 +533,19 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
         os.mkdir(inputs_folder_name)
 
     # If the input deck exists, skip
-    if os.path.isfile(new_input_name): return False
+    if os.path.isfile(new_input_name): return False # quits this function right here
 
     new_input_deck = open(new_input_name, 'w+')
 
     start_marker_cells = "Begin Cells"
     start_marker_surfs = "Begin Surfaces"
     # start_marker_data = "Begin Options"
-    start_marker_fuel = "Begin Fuel Materials"
-    end_marker_fuel = "End Fuel Materials"
+    start_marker_mats = "Begin Materials"
+    end_marker_mats = "End Materials"
 
     # Indicates if we are between 'start_marker' and 'end_marker'
-    inside_block_cells = False
-    inside_block_surfs = False
-    inside_block_fuel = False
+    inside_block_cells, inside_block_surfs, inside_block_mats= False, False, False
+    mat_id = 0
 
     '''
     'start_marker' and 'end_marker' are what you're searching for in each 
@@ -551,7 +558,7 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
     # Now, we're reading the base input deck ('rc.i') line-by-line.
     for line in base_input_deck:
         # If this is the line with the 'start_marker', rewrite it to the new file with required changes
-        if not inside_block_cells and not inside_block_surfs and not inside_block_fuel:
+        if not inside_block_cells and not inside_block_surfs and not inside_block_mats:
             if start_marker_cells in line:
                 inside_block_cells = True
                 new_input_deck.write(line)
@@ -559,15 +566,15 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
             new_input_deck.write(line)
             continue
         if start_marker_surfs in line:
-            inside_block_cells, inside_block_surfs, inside_block_fuel = False, True, False
+            inside_block_cells, inside_block_surfs, inside_block_mats = False, True, False
             new_input_deck.write(line)
             continue
-        if start_marker_fuel in line:
-            inside_block_cells, inside_block_surfs, inside_block_fuel = False, False, True
+        if start_marker_mats in line:
+            inside_block_cells, inside_block_surfs, inside_block_mats = False, False, True
             new_input_deck.write(line)
             continue
-        if end_marker_fuel in line:
-            inside_block_cells, inside_block_surfs, inside_block_fuel = False, False, False
+        if end_marker_mats in line:
+            inside_block_cells, inside_block_surfs, inside_block_mats = False, False, False
             new_input_deck.write(line)
             continue
         # Logic for what to do when we're inside the block
@@ -584,18 +591,23 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
                 continue
             else:
                 new_input_deck.write(line)
-                # new_input_deck.write(f"{' '.join(line.split())}\n") # removes multi-spaces for proper MCNP syntax highlighting
-                # ^that causes way too many issues for multi-line arguments
                 continue
         if inside_block_surfs:
             new_input_deck.write(line)
             continue
-        if inside_block_fuel:
+        if inside_block_mats:
             if len(line.split()) > 0 and line.split()[0] != 'c':
-                new_input_deck.write(f"c {line}")
-                new_input_deck.write(
-                    f"{edit_mat_temp_code(line, list(cell_temps_dict.values())[0])}\n")
-                continue
+                if line.startswith('m'):
+                    mat_id = ''.join(filter(lambda i: i.isdigit(), line.split()[0]))
+                if mat_id in list(cell_temps_dict.keys()):
+                    # print(mat_id, mat_id in list(cell_temps_dict.keys()))
+                    new_input_deck.write(f"c {line}")
+                    new_input_deck.write(f"{edit_mat_temp_code(line, cell_temps_dict[mat_id])}\n")
+                    # print(f"{edit_mat_temp_code(line, cell_temps_dict[mat_id])}\n")
+                    continue
+                else:
+                    new_input_deck.write(line)
+                    continue
             elif len(line.split()) > 0 and line.split()[0] == 'c':
                 new_input_deck.write(line)
                 continue
