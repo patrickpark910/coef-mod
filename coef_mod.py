@@ -138,7 +138,7 @@ def main():
     print(f"\nDataframe of keff values and their uncertainties:\n{keff_df}\n")
     keff_df.to_csv(KEFF_CSV_NAME)
 
-    original_x_value = float(283.15)
+    original_x_value = float(278.15)
 
     convert_keff_to_rho_coef(original_x_value, KEFF_CSV_NAME, RHO_CSV_NAME)
     calc_params_coef(RHO_CSV_NAME, PARAMS_CSV_NAME, MODULE_NAME)
