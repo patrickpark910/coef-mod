@@ -68,7 +68,7 @@ MOD_TEMPS = [(i + 273.15) for i in MOD_TEMPS_CELSIUS]
 
 def main():
     initialize_rane()
-
+    """
     BASE_INPUT_NAME = f'{MODULE_NAME}-a100-h100-r100.i'  # find_base_file(FILEPATH)
     check_kcode(FILEPATH, BASE_INPUT_NAME)
 
@@ -123,7 +123,7 @@ def main():
 
     # Deletes MCNP runtape and source dist files.
     delete_files(f"{FILEPATH}/{OUTPUTS_FOLDER_NAME}", r=True, s=True)
-
+    """
     # Setup a dataframe to collect keff values
     keff_df = pd.DataFrame(columns=["x", "keff", "keff unc"])  # use lower cases to match 'rods' def above
     keff_df["x"] = MOD_TEMPS
@@ -142,7 +142,7 @@ def main():
 
     convert_keff_to_rho_coef(original_x_value, KEFF_CSV_NAME, RHO_CSV_NAME)
     calc_params_coef(RHO_CSV_NAME, PARAMS_CSV_NAME, MODULE_NAME)
-
+    
     for rho_or_dollars in ['rho', 'dollars']: plot_data_coef_mod(KEFF_CSV_NAME, RHO_CSV_NAME, PARAMS_CSV_NAME,
                                                                  FIGURE_NAME, rho_or_dollars)
 
@@ -187,23 +187,23 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
 
     plot_color = ["tab:red", "tab:blue", "tab:green"]
 
-    ax_x_min, ax_x_max = 263.15, 363.15
-    ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 10.15, 5.075
+    ax_x_min, ax_x_max = 273, 373
+    # ax_x_major_ticks_interval, ax_x_minor_ticks_interval = 10.15, 5.075
     ax_x_major_ticks_num, ax_x_minor_ticks_num = 10+1, 2*10+1
 
     ax_keff_y_min, ax_keff_y_max = 1, 1.05
     ax_keff_y_major_ticks_interval, ax_keff_y_minor_ticks_interval = 0.01, 0.002
 
-    ax_rho_y_min, ax_rho_y_max = -0.15, 0.01
-    ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.01, 100
+    ax_rho_y_min, ax_rho_y_max = -0.50, 0.50
+    ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.1, 0.05
     if rho_or_dollars == 'dollars':
-        ax_rho_y_min, ax_rho_y_max = -0.10, 0.01
-        ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.01, 0.002
+        ax_rho_y_min, ax_rho_y_max = -0.50, 0.50
+        ax_rho_y_major_ticks_interval, ax_rho_y_minor_ticks_interval = 0.1, 0.05
 
-    ax_coef_y_min, ax_coef_y_max = -0.004, 0.004
-    ax_coef_y_major_ticks_interval, ax_coef_y_minor_ticks_interval = 0.001, 0.0002
+    ax_coef_y_min, ax_coef_y_max = -0.014, 0.004
+    ax_coef_y_major_ticks_interval, ax_coef_y_minor_ticks_interval = 0.002, 0.001
     if rho_or_dollars == 'dollars':
-        ax_coef_y_min, ax_coef_y_max = -0.022, 0.004
+        ax_coef_y_min, ax_coef_y_max = -0.02, 0.008
         ax_coef_y_major_ticks_interval, ax_coef_y_minor_ticks_interval = 0.004, 0.002
 
     fig, axs = plt.subplots(3, 1, figsize=(1636 / 96, 3 * 673 / 96), dpi=my_dpi, facecolor='w', edgecolor='k')
@@ -230,7 +230,7 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
     # for exponential strings (:.Xe) use num2tex(eq_keff[i]) to convert it into TeX exponential string
     # but that also kinda looks ugly ngl
     ax_keff.plot(x_fit, y_fit_keff, color=plot_color[0],
-                 label=r'y= {:.2e} $x^2$ {:.2e} $x$ +{:.2f},  $R^2$= {:.2f},  $\Sigma$= {:.2e}'.format(
+                 label=r'y= {:.2e} $x^2$ +{:.2e} $x$ +{:.2f},  $R^2$= {:.2f},  $\Sigma$= {:.2e}'.format(
                      eq_keff[0], eq_keff[1], eq_keff[2], r2_keff, sd_keff))
 
     # Plot data for reactivity
@@ -250,7 +250,7 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
     y_fit_rho = np.polyval(eq_rho, x_fit)
 
     ax_rho.plot(x_fit, y_fit_rho, color=plot_color[1],
-                label=r'y= {:.2e} $x^2$ {:.2e} $x$ +{:.2f},  $R^2$= {:.2f},  $\Sigma$= {:.2f}'.format(
+                label=r'y= {:.2e} $x^2$ +{:.2e} $x$ {:.2f},  $R^2$= {:.2f},  $\Sigma$= {:.2f}'.format(
                     eq_rho[0], eq_rho[1], eq_rho[2], r2_rho, sd_rho))
 
     # Plot data for coef
@@ -280,16 +280,18 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
     y_fit_coef_der = np.polyval(eq_coef_der, x_fit)
 
     ax_coef.plot(x_fit, y_fit_coef_der, color=plot_color[2], linestyle='dashed',
-                 label=r'y= {:.2e} $x$ {:.2e},  $\bar x$= {:.2e}'.format(
+                 label=r'y= {:.2e} $x$ +{:.2e},  $\bar x$= {:.2e}'.format(
                      eq_coef_der[0], eq_coef_der[1], np.mean(y_fit_coef_der)))
 
     # Keff plot settings
     ax_keff.set_xlim([ax_x_min, ax_x_max])
     ax_keff.set_ylim([ax_keff_y_min, ax_keff_y_max])
-    ax_keff.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
+    ax_keff.xaxis.set_major_locator(LinearLocator(ax_x_major_ticks_num))
+    # ax_keff.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
     ax_keff.yaxis.set_major_locator(MultipleLocator(ax_keff_y_major_ticks_interval))
     ax_keff.minorticks_on()
-    ax_keff.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
+    ax_keff.xaxis.set_minor_locator(LinearLocator(ax_x_minor_ticks_num))
+    # ax_keff.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
     ax_keff.yaxis.set_minor_locator(MultipleLocator(ax_keff_y_minor_ticks_interval))
 
     ax_keff.tick_params(axis='both', which='major', labelsize=label_fontsize)
@@ -303,10 +305,12 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
     # Reactivity worth plot settings
     ax_rho.set_xlim([ax_x_min, ax_x_max])
     ax_rho.set_ylim([ax_rho_y_min, ax_rho_y_max])
-    ax_rho.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
+    ax_rho.xaxis.set_major_locator(LinearLocator(ax_x_major_ticks_num))
+    # ax_rho.xaxis.set_major_locator(MultipleLocator(ax_x_major_ticks_interval))
     ax_rho.yaxis.set_major_locator(MultipleLocator(ax_rho_y_major_ticks_interval))
     ax_rho.minorticks_on()
-    ax_rho.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
+    ax_rho.xaxis.set_minor_locator(LinearLocator(ax_x_minor_ticks_num))
+    # ax_rho.xaxis.set_minor_locator(MultipleLocator(ax_x_minor_ticks_interval))
     ax_rho.yaxis.set_minor_locator(MultipleLocator(ax_rho_y_minor_ticks_interval))
 
     # Use for 2 decimal places after 0. for dollars units
@@ -333,7 +337,7 @@ def plot_data_coef_mod(keff_csv_name, rho_csv_name, params_csv_name, figure_name
 
     # Use for 2 decimal places after 0. for dollars units
     # Overwritten to 3 decimal places for PNTC
-    ax_coef.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+    # ax_coef.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     if rho_or_dollars == "dollars": ax_coef.yaxis.set_major_formatter(FormatStrFormatter('%.3f'))
 
     ax_coef.tick_params(axis='both', which='major', labelsize=label_fontsize)
