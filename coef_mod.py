@@ -68,7 +68,7 @@ MOD_TEMPS = [(i + 273.15) for i in MOD_TEMPS_CELSIUS]
 
 def main():
     initialize_rane()
-    """
+
     BASE_INPUT_NAME = f'{MODULE_NAME}-a100-h100-r100.i'  # find_base_file(FILEPATH)
     check_kcode(FILEPATH, BASE_INPUT_NAME)
 
@@ -122,7 +122,7 @@ def main():
 
     # Deletes MCNP runtape and source dist files.
     delete_files(f"{FILEPATH}/{OUTPUTS_FOLDER_NAME}", r=True, s=True)
-    """
+
     # Setup a dataframe to collect keff values
     keff_df = pd.DataFrame(columns=["x", "keff", "keff unc"])  # use lower cases to match 'rods' def above
     keff_df["x"] = MOD_TEMPS
