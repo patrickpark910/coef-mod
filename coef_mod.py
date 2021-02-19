@@ -100,6 +100,7 @@ def main():
 
     for mod_temp in MOD_TEMPS:
         cell_densities_dict = {WATER_MAT_CARD: find_water_density(mod_temp, units='Kelvin')}
+        print(cell_densities_dict)
         base_input_name = f'{MODULE_NAME}-temp-{str(int(mod_temp)).zfill(4)}.i'
         input_created = change_cell_densities(FILEPATH, MODULE_NAME, cell_densities_dict, base_input_name, INPUTS_FOLDER_NAME)
         if input_created:

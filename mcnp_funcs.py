@@ -487,8 +487,8 @@ def change_cell_densities(filepath, module_name, cell_densities_dict, base_input
 
     new_input_deck = open(new_input_name, 'w+')
 
-    mats_to_change = [
-        *cell_densities_dict]  # The * operator unpacks the dictionary, e.g., {"safe":1,shim":2,"reg":3} --> ["safe","shim","reg"], just in case it gets redefined elsewhere.
+    mats_to_change_str = [str(m) for m in cell_densities_dict.keys()]
+    # The * operator unpacks the dictionary, e.g., {"safe":1,shim":2,"reg":3} --> ["safe","shim","reg"], just in case it gets redefined elsewhere.
 
     start_marker_cells = "Begin Cells"
     start_marker_surfs = "Begin Surfaces"
@@ -523,10 +523,10 @@ def change_cell_densities(filepath, module_name, cell_densities_dict, base_input
         if inside_block_cells == True:
             # We're now making the actual changes to the cell density
             # 'line' already has \n at the end, but anything else doesn't
-            if len(line.split()) > 0 and line.split()[0] != 'c' and line.split()[1] in mats_to_change:
+            if len(line.split()) > 0 and line.split()[0] != 'c' and line.split()[1] in mats_to_change_str:
                 new_input_deck.write(f"c {line}")
                 new_input_deck.write(
-                    f"{edit_cell_density_code(line, line.split()[1], cell_densities_dict[line.split()[1]])}\n")
+                    f"{edit_cell_density_code(line, line.split()[1], cell_densities_dict[float(line.split()[1])])}\n")
                 continue
             elif len(line.split()) > 0 and line.split()[0] == 'c':
                 new_input_deck.write(line)
@@ -625,7 +625,7 @@ def change_cell_and_mat_temps(filepath, module_name, cell_temps_dict, base_input
         if inside_block_water_cells:
             if len(line.split()) > 0 and line.split()[0] != 'c' and 'imp:' in line:
                 new_input_deck.write(f"c {line}")
-                new_input_deck.write(line.replace('imp:n=1', f'imp:n=1 tmp={cell_temps_dict[102] * MEV_PER_KELVIN}'))
+                new_input_deck.write(line.replace('imp:n=1', f'imp:n=1 tmp={round(cell_temps_dict[102] * MEV_PER_KELVIN, 8)}'))
                 continue
             else:
                 new_input_deck.write(line)
